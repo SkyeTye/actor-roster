@@ -136,6 +136,15 @@
   .btn-danger { background: transparent; color: var(--accent); border: 1px solid var(--accent-soft); }
   .btn-danger:hover { background: var(--accent-soft); }
   .btn-sm { padding: 6px 12px; font-size: 13px; }
+  .sync-status {
+    width: 100%;
+    text-align: right;
+    font-size: 12.5px;
+    color: var(--muted);
+    min-height: 16px;
+  }
+  .sync-status.saved { color: #4a7a4a; }
+  .sync-status.offline { color: var(--accent); }
 
   /* ---------- Card grid ---------- */
   main {
@@ -392,6 +401,7 @@
   </div>
   <button class="btn btn-primary" id="addBtn">+ Add Actor</button>
   <button class="btn btn-ghost" id="lockBtn" title="Forget this device and lock the roster">Lock</button>
+  <span class="sync-status" id="syncStatus"></span>
 </header>
 
 <main hidden id="appMain">
@@ -449,13 +459,17 @@
 </dialog>
 
 <script>
-/* ================= Encrypted vault =================
-   The roster ships inside this page as an AES-256-GCM
-   ciphertext. The password entered on the lock screen
-   is stretched with PBKDF2 into the decryption key.
-   Local edits are saved to localStorage re-encrypted
-   with the same key — nothing is stored in plain text. */
+/* ================= Encrypted vault + sync =================
+   The roster lives as an AES-256-GCM ciphertext in a GitHub
+   Gist (shared across devices); a copy also ships inside this
+   page as an offline fallback. The password entered on the
+   lock screen is stretched with PBKDF2 into the decryption
+   key, which also unlocks TOKEN_VAULT — the gist write token.
+   Local edits are cached in localStorage re-encrypted with
+   the same key — nothing is stored in plain text anywhere. */
 const VAULT = {"salt":"8tqTwn6rhBW8uzgQuM6xYA==","iv":"GftkkG46BKuyC5Ip","data":"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","iterations":310000}; // @vault
+const GIST_ID = "cf3eb33ecdac7b0c764b6c5b14bcece6"; // @gist-id
+const TOKEN_VAULT = {"iv":"W6wo3bYmPgSC1R7t","data":"iO31N1gKBrxnEBhG2cLAHEF881NM33hFB36vN+YKyhW0aPmJ0DrTGvl3qG2aHNOD0Ix3ir9Kf7DTVQ=="}; // @token-vault
 
 const DATA_KEY = "actorRoster.v2";      // encrypted local edits
 const DEVICE_KEY = "actorRoster.devKey"; // remembered device key (raw AES key)
@@ -488,33 +502,94 @@ async function encryptBlob(key, obj) {
   return { iv: b64e(iv), data: b64e(data) };
 }
 
-// Throws if the key can decrypt neither the local edits nor the shipped vault.
+/* ---------- Gist sync ---------- */
+let gistToken = null;
+let offlineEdits = false;
+
+function setSync(state) {
+  const el = document.getElementById("syncStatus");
+  el.className = "sync-status " + state;
+  el.textContent = {
+    saving: "Syncing…",
+    saved: "✓ Synced",
+    offline: "⚠ Offline — edits saved on this device"
+  }[state] || "";
+}
+
+async function fetchRemote(key) {
+  const res = await fetch("https://api.github.com/gists/" + GIST_ID, {
+    headers: { Authorization: "Bearer " + gistToken, Accept: "application/vnd.github+json" },
+    cache: "no-store"
+  });
+  if (!res.ok) throw new Error("gist fetch " + res.status);
+  const gist = await res.json();
+  return decryptBlob(key, JSON.parse(gist.files["roster.vault.json"].content));
+}
+
+async function pushRemote() {
+  const blob = await encryptBlob(cryptoKey, actors);
+  blob.salt = VAULT.salt;
+  blob.iterations = VAULT.iterations;
+  const res = await fetch("https://api.github.com/gists/" + GIST_ID, {
+    method: "PATCH",
+    headers: {
+      Authorization: "Bearer " + gistToken,
+      Accept: "application/vnd.github+json",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ files: { "roster.vault.json": { content: JSON.stringify(blob) } } })
+  });
+  if (!res.ok) throw new Error("gist save " + res.status);
+}
+
+// Throws only if the password/key is wrong (can't decrypt the token vault).
 async function loadRoster(key) {
-  let seed = null, seedError = null;
-  try { seed = await decryptBlob(key, VAULT); } catch (e) { seedError = e; }
-
-  const storedRaw = localStorage.getItem(DATA_KEY);
-  if (storedRaw) {
-    try { return await decryptBlob(key, JSON.parse(storedRaw)); } catch {}
-  }
-  if (seed === null) throw seedError;
-
-  // One-time migration of pre-encryption plaintext data
+  gistToken = await decryptBlob(key, TOKEN_VAULT); // wrong password -> throws here
   try {
-    const legacy = JSON.parse(localStorage.getItem(LEGACY_KEY));
-    localStorage.removeItem(LEGACY_KEY);
-    if (Array.isArray(legacy) && legacy.length) return legacy;
-  } catch {}
-  return seed;
+    const roster = await fetchRemote(key);
+    setSync("saved");
+    return roster;
+  } catch {
+    setSync("offline");
+    const storedRaw = localStorage.getItem(DATA_KEY);
+    if (storedRaw) {
+      try { return await decryptBlob(key, JSON.parse(storedRaw)); } catch {}
+    }
+    return decryptBlob(key, VAULT); // shipped fallback copy
+  }
 }
 
 async function save() {
   localStorage.setItem(DATA_KEY, JSON.stringify(await encryptBlob(cryptoKey, actors)));
+  setSync("saving");
+  try {
+    await pushRemote();
+    offlineEdits = false;
+    setSync("saved");
+  } catch {
+    offlineEdits = true;
+    setSync("offline");
+  }
 }
+
+// If edits were made while offline, push them once the connection returns.
+window.addEventListener("online", async () => {
+  if (cryptoKey && offlineEdits) {
+    setSync("saving");
+    try {
+      await pushRemote();
+      offlineEdits = false;
+      setSync("saved");
+    } catch {
+      setSync("offline");
+    }
+  }
+});
 
 async function startSession(key, remember) {
   actors = await loadRoster(key);
   cryptoKey = key;
+  localStorage.removeItem(LEGACY_KEY); // scrub any pre-encryption plaintext
   if (remember) {
     localStorage.setItem(DEVICE_KEY, b64e(await crypto.subtle.exportKey("raw", key)));
   }
